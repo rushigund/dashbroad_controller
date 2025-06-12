@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Phone Camera Stream</title>
+</head>
+<body>
+  <h2>📷 Phone Camera Control</h2>
+  <video id="camera" autoplay playsinline width="100%" style="max-width: 600px;"></video>
+
+  <script type="module">
+    // 1. Firebase SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+    // 2. Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDVj89SXzbWlQK2EUHtFSMQozLJuC_Sq9c",
+      authDomain: "camera-d5533.firebaseapp.com",
+      projectId: "camera-d5533",
+      storageBucket: "camera-d5533.firebasestorage.app",
+      messagingSenderId: "979816260669",
+      appId: "1:979816260669:web:6484a5b85229e4f2677654",
+      databaseURL: "https://camera-d5533-default-rtdb.firebaseio.com"
+    };
+
+    // 3. Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const video = document.getElementById('camera');
+    let stream = null;
+
+    // 4. Listen to Firebase command
+    onValue(ref(db, 'camera/command'), async (snapshot) => {
+      const command = snapshot.val();
+      if (command === "on") {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = stream;
+        } catch (err) {
+          alert("Camera permission denied or error: " + err.message);
+        }
+      } else if (command === "off" && stream) {
+        let tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+      }
+    });
+  </script>
+</body>
+</html>
