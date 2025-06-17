@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -231,7 +232,7 @@
         
         .joint-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between; /* Changed to space-between for proper alignment */
             align-items: center;
             margin-bottom: 12px;
         }
@@ -313,7 +314,28 @@
             flex: 1;
             position: relative;
             background: radial-gradient(ellipse at center, rgba(30, 41, 59, 0.8) 0%, rgba(15, 15, 35, 0.9) 100%);
+            /* Ensure it fills the remaining space */
+            width: calc(100vw - 350px); 
+            height: 100vh;
+            overflow: hidden; /* Hide any overflow */
         }
+
+        /* Canvas for 3D scene */
+        #urdfCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block; /* Ensure it behaves as a block element */
+        }
+
+            #urdfCanvas {
+        z-index: 10;
+    }
+    #webcam {
+        z-index: 1;
+    }
         
         #stats {
             position: absolute;
@@ -407,6 +429,9 @@
             #sidebar {
                 width: 300px;
             }
+            #viewport {
+                width: calc(100vw - 300px);
+            }
         }
         
         @media (max-width: 768px) {
@@ -421,6 +446,7 @@
             
             #viewport {
                 height: 50vh;
+                width: 100%; /* Full width in mobile view */
             }
             
             #stats, #help {
@@ -430,22 +456,22 @@
                 right: auto;
                 bottom: auto;
             }
+        }
 
-
-            #webcam {
-            position: fixed; /* Position relative to the viewport */
-            top: 20px;       /* Distance from the top */
-            right: 20px;     /* Distance from the right */
-            width: 240px;    /* Adjust width as needed */
-            height: 180px;   /* Adjust height as needed (e.g., 4:3 aspect ratio for 640x480) */
+        /* Styles for the webcam video overlay */
+        #webcam {
+            position: absolute; /* Position relative to the parent #viewport */
+            top: 20px;          /* Distance from the top */
+            right: 20px;        /* Distance from the right */
+            width: 240px;       /* Adjust width as needed */
+            height: 180px;      /* Adjust height as needed (e.g., 4:3 aspect ratio for 640x480) */
             background-color: #000; /* Black background if video not loaded */
             border: 2px solid #33aaff; /* A subtle border for visibility */
             border-radius: 8px; /* Slightly rounded corners */
-            z-index: 1000;   /* Ensure it's on top of other elements */
-            object-fit: cover; /* Ensures the video fills the element while maintaining aspect ratio */
+            z-index: 1;      /* Ensure it's on top of other elements */
+            object-fit: cover;  /* Ensures the video fills the element while maintaining aspect ratio */
             transform: scaleX(-1); /* Flips the video horizontally to mirror the user */
-        }
-
+            pointer-events: none; /* Allows mouse events to pass through to elements beneath */
         }
     </style>
 </head>
@@ -519,9 +545,7 @@
 
         <div id="viewport">
             <canvas id="urdfCanvas"></canvas>
-
             <video id="webcam" autoplay playsinline></video>
-
             
 
             <div id="help">
@@ -542,23 +566,12 @@
         </div>
     </div>
 
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/ColladaLoader.js"></script> -->
-    // ADD these correct CDN links:
-    // ADD these correct CDN links:
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/ColladaLoader.js"></script>
 
-    <!-- Mediapipe  -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"crossorigin="anonymous"></script>
-
-    <script src="./urdf_script.js"></script>
-    <script src="./mediapipe_hand_controller.js"></script>
-
-    
+    <script type="module" src="./urdf_script.js"></script>
     </body>
     </html>
+```

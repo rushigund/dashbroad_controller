@@ -1,3 +1,5 @@
+import { MediaPipeHandController } from './mediapipe_hand_controller.js';
+
 class ProfessionalURDFViewer {
     constructor() {
         this.scene = null;
@@ -13,9 +15,10 @@ class ProfessionalURDFViewer {
         this.gridHelper = null;
         this.autoRotateEnabled = false;
         this.stats = { links: 0, joints: 0, triangles: 0 };
+        this.handController = null; // Ensure this property is declared in the class or constructor
 
-        // this.controls = null; 
-        
+        // this.controls = null;
+
         this.init();
         this.setupEventListeners();
         this.animate();
@@ -26,14 +29,14 @@ class ProfessionalURDFViewer {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x0a0a14);
         this.scene.fog = new THREE.Fog(0x0a0a14, 10, 50);
-        
+
         // Camera setup
         this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
         this.camera.position.set(4, 4, 4);
         this.camera.lookAt(0, 0, 0);
-        
+
         // Renderer setup with enhanced quality
-        this.renderer = new THREE.WebGLRenderer({ 
+        this.renderer = new THREE.WebGLRenderer({
             antialias: true,
             alpha: true,
             powerPreference: "high-performance"
@@ -50,25 +53,38 @@ class ProfessionalURDFViewer {
         if (viewportDiv) {
             viewportDiv.appendChild(this.renderer.domElement);
         }
-        
-        document.getElementById('viewport').appendChild(this.renderer.domElement);
-        
+        // Ensure you have removed the duplicate line here if it was present:
+        // document.getElementById('viewport').appendChild(this.renderer.domElement);
+
         // Professional lighting setup
         this.setupLighting();
-        
+
         // Grid
         this.gridHelper = new THREE.GridHelper(10, 20, 0x444466, 0x222233);
         this.gridHelper.material.transparent = true;
         this.gridHelper.material.opacity = 0.3;
         this.scene.add(this.gridHelper);
-        
+
         // Mouse controls
         this.setupMouseControls();
-        
+
         // Keyboard controls
         this.setupKeyboardControls();
+
+        // MediaPipe Hand Controller Initialization
+        const webcamVideoElement = document.getElementById('webcam');
+        if (webcamVideoElement) {
+            this.handController = new MediaPipeHandController(
+                this, // Pass the ProfessionalURDFViewer instance
+                webcamVideoElement,
+                "https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.task" // Path to your MediaPipe hand model
+            );
+        } else {
+            console.error("Webcam video element not found in the DOM.");
+        }
     }
-    
+
+
     setupLighting() {
         // Ambient light
         const ambientLight = new THREE.AmbientLight(0x404060, 0.3);
@@ -112,7 +128,8 @@ class ProfessionalURDFViewer {
     setupMouseControls() {
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
-        const element = this.renderer.domElement;
+        // const element = this.renderer.domElement;
+        const element = document.getElementById('viewport');
         
         element.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -943,9 +960,18 @@ class ProfessionalURDFViewer {
             this.robot.rotation.z += 0.005; // Gentle rotation
         }
 
+        // This line is crucial for rendering the 3D scene
         this.renderer.render(this.scene, this.camera);
     }
 }
+
+
+
+
+// Ensure the ProfessionalURDFViewer is instantiated, typically at the end of the file
+window.addEventListener('DOMContentLoaded', () => {
+    window.viewer = new ProfessionalURDFViewer();
+});
 
 // Handle window resize
 window.addEventListener('resize', () => {
@@ -956,5 +982,3 @@ window.addEventListener('resize', () => {
     }
 });
 
-// Initialize viewer
-window.viewer = new ProfessionalURDFViewer(); // Corrected instantiation

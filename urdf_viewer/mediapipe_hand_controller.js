@@ -1,10 +1,11 @@
-// In mediapipe_hand_controller.js
+// mediapipe_hand_controller.js
 
 import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
 
-class MediaPipeHandController {
+// ADD 'export' here
+export class MediaPipeHandController { // <--- THIS IS THE CRITICAL CHANGE
     constructor(viewerInstance, videoElement, modelPath) {
-        this.viewer = viewerInstance; // The ProfessionalURDFViewer instance
+        this.viewer = viewerInstance;
         this.video = videoElement;
         this.modelPath = modelPath;
         this.handLandmarker = null;
@@ -18,9 +19,9 @@ class MediaPipeHandController {
         const vision = await FilesetResolver.forVisionTasks(
             "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
-        this.handLandmarker = await HandLandmarker.create(vision, {
+        this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
             baseOptions: {
-                modelAssetPath: this.modelPath,
+                modelAssetPath: './mediapipe_models/hand_landmarker.task', // Path to your model
                 delegate: "GPU" // or "CPU"
             },
             numHands: 1, // Or 2 if you want to track both hands
