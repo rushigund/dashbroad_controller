@@ -1,1 +1,3 @@
-Readme for Urdf_viewer
+html and script both in same folder
+run the html file
+
