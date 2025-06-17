@@ -13,6 +13,8 @@ class ProfessionalURDFViewer {
         this.gridHelper = null;
         this.autoRotateEnabled = false;
         this.stats = { links: 0, joints: 0, triangles: 0 };
+
+        // this.controls = null; 
         
         this.init();
         this.setupEventListeners();
@@ -43,6 +45,11 @@ class ProfessionalURDFViewer {
         this.renderer.outputEncoding = THREE.sRGBEncoding;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.2;
+
+        const viewportDiv = document.getElementById('viewport');
+        if (viewportDiv) {
+            viewportDiv.appendChild(this.renderer.domElement);
+        }
         
         document.getElementById('viewport').appendChild(this.renderer.domElement);
         
