@@ -247,18 +247,34 @@ class ProfessionalURDFViewer {
         }
         this.updateStatus(`Loaded ${files.length} potential mesh files for lookup.`, 'success');
     }
+
+
+
+
+
+    //new code 
+
+
+
+
+
+
+
+
     
+    // In urdf_script.js, inside ProfessionalURDFViewer class
+
     async loadRobot() {
         const urdfFile = document.getElementById('urdfInput').files[0];
         if (!urdfFile) {
             this.updateStatus('Please select a URDF file.', 'error');
             return;
         }
-        
+    
         this.updateStatus('Loading robot...', 'loading');
-        document.getElementById('loadButtonText').innerHTML = 
+        document.getElementById('loadButtonText').innerHTML =
             '<div class="loading-spinner"></div>Loading...';
-        
+    
         // Clear previous robot if any
         if (this.robot) {
             this.scene.remove(this.robot);
@@ -270,35 +286,90 @@ class ProfessionalURDFViewer {
         this.robot = new THREE.Group();
         this.robot.name = "Robot_Root";
         this.scene.add(this.robot);
-
+    
         this.joints = {};
         this.links = {};
         this.jointControls = {};
         this.axesHelpers.forEach(helper => helper.parent.remove(helper)); // Remove old axes
         this.axesHelpers = [];
         this.loadedGeometries.clear(); // Clear cached geometries
-
+    
         try {
             const urdfContent = await this.readFile(urdfFile);
             await this.parseURDF(urdfContent);
+    
+            // --- OPTION 1: Set Initial Joint Pose (More granular, requires setInitialRobotPose() method) ---
+            // Uncomment the line below if you want to set specific joint angles to articulate the robot.
+            // You'll need to define the setInitialRobotPose() method in your class.
+            // this.setInitialRobotPose();
+            // -------------------------------------------------------------------------------------------------
+    
+            // --- OPTION 2: Apply Universal Rotation to the Entire Robot (Less granular, simpler) ---
+            // This rotates the whole robot group. Useful for correcting overall orientation (e.g., standing it up).
+            // Experiment with the rotation axis (x, y, or z) and the angle (in radians).
+            // Common examples:
+            // this.robot.rotation.x = -Math.PI / 2; // Rotate -90 degrees around X-axis (if robot is flat on its back)
+            // this.robot.rotation.y = Math.PI;    // Rotate 180 degrees around Y-axis (if robot is facing wrong way)
+            // this.robot.rotation.z = Math.PI / 2; // Rotate 90 degrees around Z-axis
+            this.robot.rotation.x = -Math.PI / 2; // Example: Try this for -90 degrees around X. Adjust as needed.
+            // You might also need to adjust its global position if the rotation causes it to go below the ground plane:
+            // this.robot.position.y = 0.5; // Example: move it up by 0.5 units if needed
+            // -------------------------------------------------------------------------------------------------
+    
             this.updateStatus('Robot loaded successfully!', 'success');
             document.getElementById('loadButtonText').textContent = 'Load Robot';
-            
+    
             // Show joint controls if there are any
             if (Object.keys(this.joints).length > 0) {
                 document.getElementById('jointSection').style.display = 'block';
             } else {
                 document.getElementById('jointSection').style.display = 'none';
             }
-
+    
             this.fitCameraToObject();
-            
+    
         } catch (error) {
             console.error('Error loading robot:', error);
             this.updateStatus('Error loading robot: ' + error.message, 'error');
             document.getElementById('loadButtonText').textContent = 'Load Robot';
         }
     }
+
+
+    setInitialRobotPose() {
+        // This function sets the initial positions for your robot's joints.
+        // Replace 'joint_name_1', 'joint_name_2', etc., with the actual names from your URDF.
+        // Adjust the rotation values (in radians) to achieve the desired "active" pose.
+        // Remember: THREE.js uses radians for rotations (Math.PI = 180 degrees).
+
+        // Example for a hypothetical robot with a few joints:
+        if (this.joints['joint_shoulder_pan']) {
+            // Rotate around the Z-axis by 45 degrees
+            this.joints['joint_shoulder_pan'].rotation.z = Math.PI / 4;
+        }
+
+        if (this.joints['joint_shoulder_lift']) {
+            // Rotate around the X-axis by -30 degrees
+            this.joints['joint_shoulder_lift'].rotation.x = -Math.PI / 6;
+        }
+
+        if (this.joints['joint_elbow']) {
+            // Rotate around the X-axis by 60 degrees
+            this.joints['joint_elbow'].rotation.x = Math.PI / 3;
+        }
+
+        if (this.joints['joint_wrist_1']) {
+            // Rotate around the Z-axis by 15 degrees
+            this.joints['joint_wrist_1'].rotation.z = Math.PI / 12;
+        }
+
+        // Add more 'if' blocks for all relevant joints that need an initial pose.
+        // You might need to experiment with the rotation axes (x, y, z) and values
+        // to get the desired "active" look for your specific robot model.
+    }
+
+
+
     
     readFile(file) {
         return new Promise((resolve, reject) => {
@@ -862,7 +933,7 @@ class ProfessionalURDFViewer {
         requestAnimationFrame(() => this.animate());
 
         if (this.autoRotateEnabled) {
-            this.robot.rotation.y += 0.005; // Gentle rotation
+            this.robot.rotation.z += 0.005; // Gentle rotation
         }
 
         this.renderer.render(this.scene, this.camera);
