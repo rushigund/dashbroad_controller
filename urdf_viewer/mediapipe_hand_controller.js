@@ -66,6 +66,8 @@ export class MediaPipeHandController {
                 try {
                     const result = await this.handLandmarker.detectForVideo(this.video, startTimeMs);
                     if (result.landmarks && result.landmarks.length > 0) {
+                        // Add this line to log the landmarks to the console
+                        console.log("Hand Landmarks:", result.landmarks[0]);
                         this.mapLandmarksToRobot(result.landmarks[0]);
                         this.drawLandmarks(result.landmarks[0]);
                     }
@@ -158,7 +160,7 @@ export class MediaPipeHandController {
                 const x = landmarks[index].x * scaleX;
                 const y = landmarks[index].y * scaleY;
                 this.overlayCtx.beginPath();
-                this.overlayCtx.arc(x, y, 7, 0, 2 * Math.PI); // Increased radius for finger landmarks
+                this.overlayCtx.arc(x, y, 7, 0, 2 * Math.PI);
                 this.overlayCtx.fill();
                 this.overlayCtx.stroke();
             }
@@ -167,7 +169,7 @@ export class MediaPipeHandController {
         // Base of the hand/palm (landmark 0) - often useful to highlight
         this.overlayCtx.fillStyle = '#F012BE'; // Pink for the palm base
         this.overlayCtx.beginPath();
-        this.overlayCtx.arc(landmarks[0].x * scaleX, landmarks[0].y * scaleY, 10, 0, 2 * Math.PI); // Increased radius for palm base
+        this.overlayCtx.arc(landmarks[0].x * scaleX, landmarks[0].y * scaleY, 10, 0, 2 * Math.PI);
         this.overlayCtx.fill();
         this.overlayCtx.stroke();
 
