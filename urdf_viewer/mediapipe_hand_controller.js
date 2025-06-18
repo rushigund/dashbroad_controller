@@ -1,3 +1,5 @@
+// mediapipe_hand_controller.js
+
 import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
 
 export class MediaPipeHandController {
@@ -8,6 +10,9 @@ export class MediaPipeHandController {
         this.runningMode = "VIDEO";
         this.lastVideoTime = -1;
         this.webcamInitialized = false;
+        this.resetTimer = null; // New: Timer for resetting hand
+        this.resetDelay = 2000; // New: 2 seconds delay for reset
+        this.isHandDetected = false; // New: Flag to track hand detection status
 
         this.initMediaPipe();
     }
@@ -66,22 +71,75 @@ export class MediaPipeHandController {
                 try {
                     const result = await this.handLandmarker.detectForVideo(this.video, startTimeMs);
                     if (result.landmarks && result.landmarks.length > 0) {
+                        this.isHandDetected = true; // Hand detected
+                        clearTimeout(this.resetTimer); // Clear any pending reset
                         // Add this line to log the landmarks to the console
-                        console.log("Hand Landmarks:", result.landmarks[0]);
+                        // console.log("Hand Landmarks:", result.landmarks[0]);
                         this.mapLandmarksToRobot(result.landmarks[0]);
                         this.drawLandmarks(result.landmarks[0]);
+                    } else {
+                        this.isHandDetected = false; // No hand detected
+                        this.startResetTimer(); // Start/restart the reset timer
+                        this.drawLandmarks([]); // Clear overlay if no hand
                     }
                 } catch (error) {
                     console.error("Hand detection error:", error);
+                    this.isHandDetected = false; // Assume no hand on error
+                    this.startResetTimer();
                 }
             }
         }
         requestAnimationFrame(this.detectHandsInRealTime.bind(this));
     }
 
+    // New: Start or restart the reset timer
+    startResetTimer() {
+        if (this.resetTimer) {
+            clearTimeout(this.resetTimer);
+        }
+        this.resetTimer = setTimeout(() => {
+            console.log("No hand detected for 2 seconds. Resetting robot to default pose and camera.");
+            this.resetRobotPose(); // Call the new reset function
+            // Optionally, also reset camera if desired
+            if (this.viewer && this.viewer.resetCamera) {
+                this.viewer.resetCamera();
+            }
+            this.viewer.updateStatus("Hand tracking idle. Robot and camera reset.", 'info');
+        }, this.resetDelay);
+    }
+
+    // New: Function to reset all relevant joints to 0
+    resetRobotPose() {
+        if (this.viewer && this.viewer.joints) {
+            for (const jointName in this.viewer.joints) {
+                const joint = this.viewer.joints[jointName];
+                // Only reset revolute/prismatic joints that are likely controlled by hand
+                if (joint.type === 'revolute' || joint.type === 'continuous' || joint.type === 'prismatic') {
+                     // Ensure the joint actually has a corresponding control or is part of your hand model
+                     // You might want a more specific list of joints to reset if your robot has many
+                    if (this.viewer.updateJoint) {
+                        this.viewer.updateJoint(jointName, 0); // Reset to 0 position
+                        // Also update the UI slider if it exists
+                        if (this.viewer.jointControls && this.viewer.jointControls[jointName]) {
+                            this.viewer.jointControls[jointName].value = 0;
+                            const valueDisplay = this.viewer.jointControls[jointName].nextElementSibling;
+                            if (valueDisplay) valueDisplay.textContent = '0.00';
+                        }
+                    }
+                }
+            }
+        }
+        // Also clear previousAngles for smoothing
+        this.previousAngles = {};
+    }
+
     drawLandmarks(landmarks) {
         this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
         
+        if (landmarks.length === 0) { // If no landmarks, just clear and return
+            return;
+        }
+
         // Save the current state of the canvas
         this.overlayCtx.save();
         
@@ -320,5 +378,43 @@ export class MediaPipeHandController {
             const activeJoints = Object.keys(this.previousAngles || {}).length;
             this.viewer.updateStatus(`Hand tracking active - controlling ${activeJoints} joints`, 'success');
         }
+
+        // --- NEW CODE FOR CAMERA ROTATION ---
+        // Calculate hand rotation
+        const wrist = handLandmarks[0];       // Wrist (base of palm)
+        const indexMCP = handLandmarks[5];    // Base of index finger
+        const pinkyMCP = handLandmarks[17];   // Base of pinky finger
+
+        if (wrist && indexMCP && pinkyMCP) {
+            // Create vectors to define the hand's orientation
+            // Vector from wrist to index MCP (roughly forward-up direction of hand)
+            const v1 = new THREE.Vector3(indexMCP.x - wrist.x, indexMCP.y - wrist.y, indexMCP.z - wrist.z);
+            // Vector from pinky MCP to index MCP (roughly across the hand)
+            const v2 = new THREE.Vector3(pinkyMCP.x - indexMCP.x, pinkyMCP.y - indexMCP.y, pinkyMCP.z - indexMCP.z);
+
+            // Calculate the normal vector to the palm, representing the "up" direction of the hand
+            const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+
+            // Calculate the "forward" direction of the hand (e.g., from wrist to middle finger tip, or just v1)
+            const forward = v1.clone().normalize();
+            
+            // Create a rotation matrix from these vectors
+            // You might need to adjust the order of cross products and the interpretation of axes
+            // depending on how you want the camera to align with your hand.
+            const right = new THREE.Vector3().crossVectors(normal, forward).normalize();
+            const up = new THREE.Vector3().crossVectors(forward, right).normalize(); // Re-orthogonalize up vector
+
+            const rotationMatrix = new THREE.Matrix4();
+            rotationMatrix.makeBasis(right, up, forward); // This forms the orientation basis
+
+            // Extract Euler angles or a Quaternion from the matrix
+            const handQuaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+
+            // Send the rotation to the viewer
+            if (this.viewer && this.viewer.updateCameraRotation) {
+                this.viewer.updateCameraRotation(handQuaternion);
+            }
+        }
+        // --- END NEW CODE ---
     }
 }
