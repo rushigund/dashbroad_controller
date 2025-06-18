@@ -178,6 +178,147 @@ export class MediaPipeHandController {
     }
 
     mapLandmarksToRobot(handLandmarks) {
-        // Your logic for converting landmarks to URDF joint angles
+        // Joint mapping based on your whiteboard notes
+        const jointMapping = {
+            thumb: { landmarks: [1, 2, 3, 4], joints: ['joint_12', 'joint_13', 'joint_14', 'joint_15'] },
+            index: { landmarks: [5, 6, 7, 8], joints: ['joint_0', 'joint_1', 'joint_2', 'joint_3'] },
+            middle: { landmarks: [9, 10, 11, 12], joints: ['joint_4', 'joint_5', 'joint_6', 'joint_7'] },
+            ring: { landmarks: [13, 14, 15, 16], joints: ['joint_8', 'joint_9', 'joint_10', 'joint_11'] }
+            // Pinky ignored as noted
+        };
+    
+        // Helper function to calculate angle between two vectors
+        const calculateAngle = (v1, v2) => {
+            const dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+            const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
+            const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
+            
+            if (mag1 === 0 || mag2 === 0) return 0;
+            
+            const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
+            return Math.acos(cosAngle);
+        };
+    
+        // Helper function to create vector between two landmarks
+        const createVector = (from, to) => ({
+            x: to.x - from.x,
+            y: to.y - from.y,
+            z: to.z - from.z || 0 // Handle 2D coordinates
+        });
+    
+        // Helper function to calculate finger bend angle
+        const calculateFingerBend = (allLandmarks, fingerLandmarkIndices) => {
+            const angles = [];
+            
+            for (let i = 0; i < fingerLandmarkIndices.length - 2; i++) {
+                const p1 = allLandmarks[fingerLandmarkIndices[i]];
+                const p2 = allLandmarks[fingerLandmarkIndices[i + 1]];
+                const p3 = allLandmarks[fingerLandmarkIndices[i + 2]];
+                
+                if (!p1 || !p2 || !p3) {
+                    angles.push(0);
+                    continue;
+                }
+    
+                // Create vectors for the bone segments
+                const v1 = createVector(p2, p1); // Vector from joint to previous point
+                const v2 = createVector(p2, p3); // Vector from joint to next point
+                
+                // Calculate the bend angle (supplement of the angle between vectors)
+                const angle = Math.PI - calculateAngle(v1, v2);
+                angles.push(angle);
+            }
+            
+            return angles;
+        };
+    
+        // Calculate abduction angle (side-to-side movement)
+        const calculateAbduction = (allLandmarks, fingerLandmarkIndices, palmCenter) => {
+            const fingerBase = allLandmarks[fingerLandmarkIndices[0]];
+            const fingerTip = allLandmarks[fingerLandmarkIndices[fingerLandmarkIndices.length - 1]];
+            
+            if (!fingerBase || !fingerTip || !palmCenter) return 0;
+            
+            // Create vectors
+            const palmToBase = createVector(palmCenter, fingerBase);
+            const baseToTip = createVector(fingerBase, fingerTip);
+            
+            // Project onto horizontal plane (assuming y is up)
+            palmToBase.y = 0;
+            baseToTip.y = 0;
+            
+            // Calculate angle in horizontal plane
+            return calculateAngle(palmToBase, baseToTip) - Math.PI/2;
+        };
+    
+        // Get palm center (approximate center of palm)
+        const palmCenter = {
+            x: (handLandmarks[0].x + handLandmarks[5].x + handLandmarks[9].x + handLandmarks[13].x + handLandmarks[17].x) / 5,
+            y: (handLandmarks[0].y + handLandmarks[5].y + handLandmarks[9].y + handLandmarks[13].y + handLandmarks[17].y) / 5,
+            z: ((handLandmarks[0].z || 0) + (handLandmarks[5].z || 0) + (handLandmarks[9].z || 0) + (handLandmarks[13].z || 0) + (handLandmarks[17].z || 0)) / 5
+        };
+    
+        // Process each finger
+        Object.entries(jointMapping).forEach(([fingerName, mapping]) => {
+            const { landmarks: landmarkIndices, joints: jointNames } = mapping;
+            
+            // Get landmark points for this finger
+            const fingerLandmarks = landmarkIndices.map(idx => handLandmarks[idx]);
+            
+            // Calculate bend angles for the finger segments
+            const bendAngles = calculateFingerBend(handLandmarks, landmarkIndices);
+            
+            // Calculate abduction angle for the base joint
+            const abductionAngle = calculateAbduction(handLandmarks, landmarkIndices, palmCenter);
+            
+            // Map angles to joints
+            jointNames.forEach((jointName, jointIndex) => {
+                let angle = 0;
+                
+                if (jointIndex === 0) {
+                    // First joint: abduction/adduction
+                    angle = abductionAngle * 0.5; // Scale down for realistic movement
+                } else if (jointIndex - 1 < bendAngles.length) {
+                    // Bend joints: use calculated bend angles
+                    angle = bendAngles[jointIndex - 1] * 0.8; // Scale for realistic movement
+                    
+                    // Apply coupling for natural finger motion
+                    if (jointIndex === 2) {
+                        angle += bendAngles[0] * 0.3; // PIP influenced by MCP
+                    } else if (jointIndex === 3) {
+                        angle += bendAngles[0] * 0.2 + bendAngles[1] * 0.4; // DIP influenced by previous joints
+                    }
+                }
+                
+                // Apply joint limits (approximate human finger limits)
+                if (fingerName === 'thumb') {
+                    angle = Math.max(-0.5, Math.min(1.5, angle));
+                } else {
+                    angle = Math.max(-0.2, Math.min(1.8, angle));
+                }
+                
+                // Apply smoothing (simple exponential smoothing)
+                if (!this.previousAngles) this.previousAngles = {};
+                if (this.previousAngles[jointName] !== undefined) {
+                    const smoothingFactor = 0.7;
+                    angle = this.previousAngles[jointName] * (1 - smoothingFactor) + angle * smoothingFactor;
+                }
+                this.previousAngles[jointName] = angle;
+                
+                // Update the robot joint
+                if (this.viewer && this.viewer.updateJoint) {
+                    this.viewer.updateJoint(jointName, angle);
+                }
+                
+                // Debug output (uncomment for debugging)
+                // console.log(`${fingerName} ${jointName}: ${angle.toFixed(3)} rad`);
+            });
+        });
+    
+        // Optional: Update status with joint info
+        if (this.viewer && this.viewer.updateStatus) {
+            const activeJoints = Object.keys(this.previousAngles || {}).length;
+            this.viewer.updateStatus(`Hand tracking active - controlling ${activeJoints} joints`, 'success');
+        }
     }
 }
