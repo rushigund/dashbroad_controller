@@ -1,4 +1,4 @@
-```html
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -473,6 +473,17 @@
             transform: scaleX(-1); /* Flips the video horizontally to mirror the user */
             pointer-events: none; /* Allows mouse events to pass through to elements beneath */
         }
+
+        /* for mediapipe hands overlay */
+        #overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 240px;
+            height: 180px;
+            z-index: 2;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -546,6 +557,7 @@
         <div id="viewport">
             <canvas id="urdfCanvas"></canvas>
             <video id="webcam" autoplay playsinline></video>
+            <canvas id="overlay"></canvas>
             
 
             <div id="help">
@@ -574,4 +586,3 @@
     <script type="module" src="./urdf_script.js"></script>
     </body>
     </html>
-```

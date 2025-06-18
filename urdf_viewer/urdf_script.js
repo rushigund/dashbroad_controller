@@ -74,11 +74,7 @@ class ProfessionalURDFViewer {
         // MediaPipe Hand Controller Initialization
         const webcamVideoElement = document.getElementById('webcam');
         if (webcamVideoElement) {
-            this.handController = new MediaPipeHandController(
-                this, // Pass the ProfessionalURDFViewer instance
-                webcamVideoElement,
-                "https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.task" // Path to your MediaPipe hand model
-            );
+            this.handController = new MediaPipeHandController(this, webcamVideoElement);
         } else {
             console.error("Webcam video element not found in the DOM.");
         }
