@@ -1,4 +1,5 @@
-import { MediaPipeHandController } from './mediapipe_hand_controller.js';
+import { MediaPipePoseController } from './MediaPipePoseController.js';
+
 
 class ProfessionalURDFViewer {
     constructor() {
@@ -73,9 +74,10 @@ class ProfessionalURDFViewer {
 
         // MediaPipe Hand Controller Initialization
         const webcamVideoElement = document.getElementById('webcam');
-        if (webcamVideoElement) {
-            this.handController = new MediaPipeHandController(this, webcamVideoElement);
-        } else {
+      if (webcamVideoElement) {
+          this.poseController = new MediaPipePoseController(this, webcamVideoElement);
+        }
+      else {
             console.error("Webcam video element not found in the DOM.");
         }
     }
