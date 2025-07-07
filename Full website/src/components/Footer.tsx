@@ -177,9 +177,17 @@ const Footer = () => {
         {/* Bottom Footer */}
         <div className="border-t py-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-muted-foreground text-sm">
-              © {new Date().getFullYear()} Techligence. All rights reserved.
-            </p>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <p className="text-muted-foreground text-sm">
+                © {new Date().getFullYear()} Techligence. All rights reserved.
+              </p>
+              <a
+                href="/admin/login"
+                className="text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                Admin Access
+              </a>
+            </div>
 
             {/* Social Links */}
             <div className="flex items-center gap-4">
