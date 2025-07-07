@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Environment, Grid, Text } from "@react-three/drei";
 import * as THREE from "three";
+import { URDFLoader, URDFRobot } from "@/services/urdfLoader";
 
 interface RobotModelProps {
   gestureData: {
@@ -136,6 +137,129 @@ const SimpleRobot = ({ gestureData }: { gestureData: any }) => {
   );
 };
 
+const URDFRobotComponent = ({
+  gestureData,
+  urdfRobot,
+}: {
+  gestureData: any;
+  urdfRobot: URDFRobot;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const robotRef = useRef<URDFRobot>(urdfRobot);
+
+  useEffect(() => {
+    robotRef.current = urdfRobot;
+  }, [urdfRobot]);
+
+  useFrame((state) => {
+    if (!groupRef.current || !robotRef.current) return;
+
+    const { handPosition, gestureType, isHandDetected } = gestureData;
+
+    if (isHandDetected) {
+      // Move robot to follow hand position
+      const targetX = (handPosition.x - 0.5) * 8;
+      const targetY = (0.5 - handPosition.y) * 4 + 1;
+
+      groupRef.current.position.x = THREE.MathUtils.lerp(
+        groupRef.current.position.x,
+        targetX,
+        0.1,
+      );
+      groupRef.current.position.y = THREE.MathUtils.lerp(
+        groupRef.current.position.y,
+        targetY,
+        0.1,
+      );
+
+      // Gesture-based joint animations
+      const time = state.clock.elapsedTime;
+      const joints = robotRef.current.joints;
+
+      switch (gestureType) {
+        case "open":
+          // Gentle swaying motion
+          groupRef.current.rotation.y = Math.sin(time) * 0.1;
+
+          // Animate any wheel joints
+          Object.keys(joints).forEach((jointName) => {
+            if (jointName.includes("wheel")) {
+              joints[jointName].setAngle(time * 0.5);
+            }
+          });
+          break;
+
+        case "pinch":
+          // Rotate entire robot and animate wheels
+          groupRef.current.rotation.y += 0.03;
+
+          Object.keys(joints).forEach((jointName) => {
+            if (jointName.includes("wheel")) {
+              joints[jointName].setAngle(time * 2);
+            }
+          });
+          break;
+
+        case "fist":
+          // Tilt and animate joints
+          groupRef.current.rotation.x = Math.sin(time * 2) * 0.1;
+
+          Object.keys(joints).forEach((jointName) => {
+            if (jointName.includes("joint") && !jointName.includes("wheel")) {
+              joints[jointName].setAngle(Math.sin(time * 3) * 0.2);
+            }
+          });
+          break;
+
+        case "point":
+          // Oscillating movements
+          groupRef.current.rotation.z = Math.sin(time * 3) * 0.15;
+
+          Object.keys(joints).forEach((jointName) => {
+            if (joints[jointName].type === "revolute") {
+              const limit = joints[jointName].limit;
+              if (limit) {
+                const range = (limit.upper - limit.lower) * 0.3; // Use 30% of joint range
+                const center = (limit.upper + limit.lower) / 2;
+                joints[jointName].setAngle(center + Math.sin(time * 2) * range);
+              }
+            }
+          });
+          break;
+
+        default:
+          // Return to neutral position
+          groupRef.current.rotation.x = THREE.MathUtils.lerp(
+            groupRef.current.rotation.x,
+            0,
+            0.1,
+          );
+          groupRef.current.rotation.z = THREE.MathUtils.lerp(
+            groupRef.current.rotation.z,
+            0,
+            0.1,
+          );
+
+          // Reset joints to neutral
+          Object.keys(joints).forEach((jointName) => {
+            if (!jointName.includes("wheel")) {
+              joints[jointName].setAngle(
+                THREE.MathUtils.lerp(joints[jointName].angle, 0, 0.05),
+              );
+            }
+          });
+          break;
+      }
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      <primitive object={urdfRobot} />
+    </group>
+  );
+};
+
 const CameraController = ({ gestureData }: { gestureData: any }) => {
   const { camera } = useThree();
 
@@ -151,8 +275,84 @@ const CameraController = ({ gestureData }: { gestureData: any }) => {
   return null;
 };
 
+const LoadingSpinner = () => (
+  <Text
+    position={[0, 0, 0]}
+    fontSize={0.5}
+    color="#94a3b8"
+    anchorX="center"
+    anchorY="middle"
+  >
+    Loading URDF model...
+  </Text>
+);
+
 const RobotModel3D: React.FC<RobotModelProps> = ({ gestureData, urdfData }) => {
   const [showGrid, setShowGrid] = useState(true);
+  const [urdfRobot, setUrdfRobot] = useState<URDFRobot | null>(null);
+  const [isLoadingURDF, setIsLoadingURDF] = useState(false);
+  const [urdfError, setUrdfError] = useState<string | null>(null);
+
+  // Load URDF when urdfData changes
+  useEffect(() => {
+    if (urdfData && urdfData.trim().length > 0) {
+      console.log("🔄 Loading URDF model into 3D viewer...");
+      console.log("📄 URDF preview:", urdfData.substring(0, 200) + "...");
+      setIsLoadingURDF(true);
+      setUrdfError(null);
+
+      const loadURDF = async () => {
+        try {
+          // Validate URDF format first
+          if (!urdfData.includes("<robot")) {
+            throw new Error("Invalid URDF: Missing <robot> tag");
+          }
+
+          if (!urdfData.includes("<link")) {
+            throw new Error("Invalid URDF: No <link> elements found");
+          }
+
+          const loader = new URDFLoader();
+          const robot = await loader.parseURDF(urdfData);
+
+          const linkCount = Object.keys(robot.links).length;
+          const jointCount = Object.keys(robot.joints).length;
+
+          console.log("✅ URDF model loaded successfully!");
+          console.log(
+            `📊 Robot stats: ${linkCount} links, ${jointCount} joints`,
+          );
+          console.log("🔗 Links:", Object.keys(robot.links));
+          console.log("⚙️ Joints:", Object.keys(robot.joints));
+
+          if (linkCount === 0) {
+            throw new Error("No valid links were parsed from URDF");
+          }
+
+          setUrdfRobot(robot);
+          setUrdfError(null);
+        } catch (error) {
+          console.error("❌ Failed to load URDF model:", error);
+          setUrdfError(
+            error instanceof Error
+              ? error.message
+              : "Unknown error loading URDF",
+          );
+          setUrdfRobot(null);
+        } finally {
+          setIsLoadingURDF(false);
+        }
+      };
+
+      // Add a small delay to show loading state
+      setTimeout(loadURDF, 100);
+    } else {
+      console.log("🔄 No URDF data provided, using default robot");
+      setUrdfRobot(null);
+      setUrdfError(null);
+      setIsLoadingURDF(false);
+    }
+  }, [urdfData]);
 
   return (
     <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg overflow-hidden relative">
@@ -182,11 +382,46 @@ const RobotModel3D: React.FC<RobotModelProps> = ({ gestureData, urdfData }) => {
         <div>Confidence: {(gestureData.confidence * 100).toFixed(0)}%</div>
       </div>
 
+      {/* Model Status */}
+      <div className="absolute bottom-4 left-4 z-10 bg-black/50 text-white p-3 rounded text-sm">
+        <div className="flex items-center gap-2">
+          <div
+            className={`w-2 h-2 rounded-full ${
+              urdfRobot
+                ? "bg-green-400"
+                : isLoadingURDF
+                  ? "bg-yellow-400 animate-pulse"
+                  : urdfError
+                    ? "bg-red-400"
+                    : "bg-blue-400"
+            }`}
+          />
+          <span>
+            {isLoadingURDF
+              ? "Loading URDF..."
+              : urdfRobot
+                ? "URDF Model"
+                : urdfError
+                  ? "URDF Error"
+                  : "Default Robot"}
+          </span>
+        </div>
+        {urdfRobot && (
+          <div className="text-xs mt-1 text-gray-300">
+            {Object.keys(urdfRobot.links).length} links ���{" "}
+            {Object.keys(urdfRobot.joints).length} joints
+          </div>
+        )}
+        {urdfError && (
+          <div className="text-xs mt-1 text-red-300 max-w-xs">{urdfError}</div>
+        )}
+      </div>
+
       <Canvas
         camera={{ position: [8, 6, 12], fov: 50 }}
         style={{ width: "100%", height: "100%" }}
       >
-        <Suspense fallback={null}>
+        <Suspense fallback={<LoadingSpinner />}>
           {/* Lighting */}
           <ambientLight intensity={0.4} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
@@ -211,8 +446,17 @@ const RobotModel3D: React.FC<RobotModelProps> = ({ gestureData, urdfData }) => {
             />
           )}
 
-          {/* Robot Model */}
-          <SimpleRobot gestureData={gestureData} />
+          {/* Robot Model - either URDF or default */}
+          {isLoadingURDF ? (
+            <LoadingSpinner />
+          ) : urdfRobot ? (
+            <URDFRobotComponent
+              gestureData={gestureData}
+              urdfRobot={urdfRobot}
+            />
+          ) : (
+            <SimpleRobot gestureData={gestureData} />
+          )}
 
           {/* Controls */}
           <OrbitControls
@@ -234,7 +478,9 @@ const RobotModel3D: React.FC<RobotModelProps> = ({ gestureData, urdfData }) => {
             anchorX="center"
             anchorY="middle"
           >
-            Use hand gestures to control the robot
+            {urdfRobot
+              ? "Custom URDF model loaded"
+              : "Use hand gestures to control the robot"}
           </Text>
         </Suspense>
       </Canvas>

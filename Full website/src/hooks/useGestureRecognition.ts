@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useFallbackGesture } from "./useFallbackGesture";
 
 interface GestureData {
   landmarks: any[];
@@ -22,9 +23,13 @@ export const useGestureRecognition = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
+
+  // Fallback gesture system
+  const fallbackGesture = useFallbackGesture();
 
   // Gesture detection based on hand landmarks
   const detectGesture = (
@@ -169,132 +174,186 @@ export const useGestureRecognition = () => {
       setIsLoading(true);
       setError(null);
 
-      // Dynamic import to avoid SSR issues
-      const { Hands } = await import("@mediapipe/hands");
-      const { Camera } = await import("@mediapipe/camera_utils");
-
-      if (!videoRef.current || !canvasRef.current) {
-        throw new Error("Video or canvas element not available");
+      // Check camera permissions first
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({
+            name: "camera" as PermissionName,
+          });
+          if (permission.state === "denied") {
+            throw new Error(
+              "Camera access denied. Please enable camera permissions in your browser settings.",
+            );
+          }
+        } catch (permError) {
+          console.warn("Permission query not supported:", permError);
+        }
       }
 
-      const canvas = canvasRef.current;
-      canvas.width = 640;
-      canvas.height = 480;
+      // Check if MediaPipe is available before importing
+      let Hands, Camera;
+      try {
+        // Dynamic import to avoid SSR issues and build errors
+        const handsModule = await import("@mediapipe/hands");
+        const cameraModule = await import("@mediapipe/camera_utils");
 
-      // Initialize MediaPipe Hands
-      const hands = new Hands({
-        locateFile: (file: string) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        },
-      });
+        Hands = handsModule.Hands;
+        Camera = cameraModule.Camera;
 
-      hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-
-      hands.onResults((results: any) => {
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw video frame
-        if (videoRef.current) {
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        if (!Hands || !Camera) {
+          throw new Error("MediaPipe classes not available");
         }
 
-        if (
-          results.multiHandLandmarks &&
-          results.multiHandLandmarks.length > 0
-        ) {
-          const landmarks = results.multiHandLandmarks[0];
-
-          // Draw landmarks
-          drawLandmarks(landmarks, canvas);
-
-          // Detect gesture
-          const gestureType = detectGesture(landmarks);
-
-          // Calculate hand center position
-          const handCenter = landmarks.reduce(
-            (acc: any, landmark: any) => ({
-              x: acc.x + landmark.x,
-              y: acc.y + landmark.y,
-              z: acc.z + landmark.z,
-            }),
-            { x: 0, y: 0, z: 0 },
-          );
-
-          handCenter.x /= landmarks.length;
-          handCenter.y /= landmarks.length;
-          handCenter.z /= landmarks.length;
-
-          setGestureData({
-            landmarks: landmarks,
-            isHandDetected: true,
-            gestureType,
-            handPosition: handCenter,
-            confidence: 0.9,
-          });
-
-          // Draw gesture info
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(10, 10, 200, 80);
-          ctx.fillStyle = "#000000";
-          ctx.font = "16px Arial";
-          ctx.fillText(`Gesture: ${gestureType.toUpperCase()}`, 20, 30);
-          ctx.fillText(`Hands: ${results.multiHandLandmarks.length}`, 20, 50);
-          ctx.fillText(`Confidence: 90%`, 20, 70);
-        } else {
-          setGestureData((prev) => ({
-            ...prev,
-            landmarks: [],
-            isHandDetected: false,
-            gestureType: "idle",
-            confidence: 0,
-          }));
-
-          // Draw "No hand detected" message
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(10, 10, 200, 40);
-          ctx.fillStyle = "#000000";
-          ctx.font = "16px Arial";
-          ctx.fillText("No hand detected", 20, 35);
+        if (!videoRef.current || !canvasRef.current) {
+          throw new Error("Video or canvas element not available");
         }
-      });
 
-      handsRef.current = hands;
+        const canvas = canvasRef.current;
+        canvas.width = 640;
+        canvas.height = 480;
 
-      // Initialize camera
-      const camera = new Camera(videoRef.current, {
-        onFrame: async () => {
-          if (handsRef.current && videoRef.current) {
-            await handsRef.current.send({ image: videoRef.current });
+        // Initialize MediaPipe Hands
+        const hands = new Hands({
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+          },
+        });
+
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        hands.onResults((results: any) => {
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Draw video frame
+          if (videoRef.current) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
           }
-        },
-        width: 640,
-        height: 480,
-      });
 
-      cameraRef.current = camera;
-      await camera.start();
+          if (
+            results.multiHandLandmarks &&
+            results.multiHandLandmarks.length > 0
+          ) {
+            const landmarks = results.multiHandLandmarks[0];
 
-      setIsInitialized(true);
-      setIsLoading(false);
-      setError(null);
-      console.log("✅ MediaPipe hand tracking initialized successfully");
+            // Draw landmarks
+            drawLandmarks(landmarks, canvas);
+
+            // Detect gesture
+            const gestureType = detectGesture(landmarks);
+
+            // Calculate hand center position
+            const handCenter = landmarks.reduce(
+              (acc: any, landmark: any) => ({
+                x: acc.x + landmark.x,
+                y: acc.y + landmark.y,
+                z: acc.z + landmark.z,
+              }),
+              { x: 0, y: 0, z: 0 },
+            );
+
+            handCenter.x /= landmarks.length;
+            handCenter.y /= landmarks.length;
+            handCenter.z /= landmarks.length;
+
+            setGestureData({
+              landmarks: landmarks,
+              isHandDetected: true,
+              gestureType,
+              handPosition: handCenter,
+              confidence: 0.9,
+            });
+
+            // Draw gesture info
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(10, 10, 200, 80);
+            ctx.fillStyle = "#000000";
+            ctx.font = "16px Arial";
+            ctx.fillText(`Gesture: ${gestureType.toUpperCase()}`, 20, 30);
+            ctx.fillText(`Hands: ${results.multiHandLandmarks.length}`, 20, 50);
+            ctx.fillText(`Confidence: 90%`, 20, 70);
+          } else {
+            setGestureData((prev) => ({
+              ...prev,
+              landmarks: [],
+              isHandDetected: false,
+              gestureType: "idle",
+              confidence: 0,
+            }));
+
+            // Draw "No hand detected" message
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(10, 10, 200, 40);
+            ctx.fillStyle = "#000000";
+            ctx.font = "16px Arial";
+            ctx.fillText("No hand detected", 20, 35);
+          }
+        });
+
+        handsRef.current = hands;
+
+        // Initialize camera with better error handling
+        const camera = new Camera(videoRef.current, {
+          onFrame: async () => {
+            if (handsRef.current && videoRef.current) {
+              await handsRef.current.send({ image: videoRef.current });
+            }
+          },
+          width: 640,
+          height: 480,
+        });
+
+        cameraRef.current = camera;
+
+        try {
+          await camera.start();
+        } catch (cameraError: any) {
+          console.error("Camera start error:", cameraError);
+
+          // Handle specific camera errors
+          if (cameraError.name === "NotAllowedError") {
+            throw new Error(
+              "Camera access denied. Please allow camera access and refresh the page.",
+            );
+          } else if (cameraError.name === "NotFoundError") {
+            throw new Error(
+              "No camera found. Please connect a camera and try again.",
+            );
+          } else if (cameraError.name === "NotReadableError") {
+            throw new Error("Camera is already in use by another application.");
+          } else {
+            throw cameraError;
+          }
+        }
+
+        setIsInitialized(true);
+        setIsLoading(false);
+        setError(null);
+        console.log("✅ MediaPipe hand tracking initialized successfully");
+      } catch (importError: any) {
+        console.warn("MediaPipe packages not available:", importError.message);
+        throw new Error(
+          "MediaPipe not available - falling back to camera only",
+        );
+      }
     } catch (err: any) {
-      console.error("MediaPipe initialization error:", err);
-      setError(`Failed to initialize MediaPipe: ${err.message}`);
-      setIsInitialized(false);
+      console.warn(
+        "MediaPipe initialization failed, using fallback:",
+        err.message,
+      );
+      setUseFallback(true);
       setIsLoading(false);
 
-      // Fall back to simple camera access
-      await initializeFallbackCamera();
+      // Use fallback gesture system
+      await fallbackGesture.initializeCamera();
     }
   };
 
@@ -337,56 +396,94 @@ export const useGestureRecognition = () => {
   };
 
   const initializeCamera = async () => {
-    await initializeMediaPipe();
+    try {
+      if (useFallback) {
+        await fallbackGesture.initializeCamera();
+      } else {
+        await initializeMediaPipe();
+      }
+    } catch (error: any) {
+      console.error("Camera initialization failed:", error);
+
+      // Provide user-friendly error messages
+      let errorMessage = "Failed to initialize camera";
+      if (
+        error.message.includes("Permission denied") ||
+        error.message.includes("Camera access denied")
+      ) {
+        errorMessage =
+          "Camera access denied. Please allow camera access in your browser settings and refresh the page.";
+      } else if (error.message.includes("No camera found")) {
+        errorMessage =
+          "No camera found. Please connect a camera and try again.";
+      } else if (error.message.includes("already in use")) {
+        errorMessage = "Camera is already in use by another application.";
+      } else if (
+        error.message.includes("Video or canvas element not available")
+      ) {
+        errorMessage =
+          "Camera interface not ready. Please refresh the page and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
+      setIsInitialized(false);
+      setIsLoading(false);
+    }
   };
 
   const stopCamera = () => {
-    try {
-      // Stop MediaPipe camera
-      if (cameraRef.current) {
-        cameraRef.current.stop();
-        cameraRef.current = null;
-      }
-
-      // Stop fallback stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => {
-          track.stop();
-        });
-        streamRef.current = null;
-      }
-
-      // Clear video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-
-      // Clear canvas
-      if (canvasRef.current) {
-        const ctx = canvasRef.current.getContext("2d");
-        if (ctx) {
-          ctx.clearRect(
-            0,
-            0,
-            canvasRef.current.width,
-            canvasRef.current.height,
-          );
+    if (useFallback) {
+      fallbackGesture.stopCamera();
+    } else {
+      try {
+        // Stop MediaPipe camera
+        if (cameraRef.current) {
+          cameraRef.current.stop();
+          cameraRef.current = null;
         }
+
+        // Stop fallback stream
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => {
+            track.stop();
+          });
+          streamRef.current = null;
+        }
+
+        // Clear video element
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+
+        // Clear canvas
+        if (canvasRef.current) {
+          const ctx = canvasRef.current.getContext("2d");
+          if (ctx) {
+            ctx.clearRect(
+              0,
+              0,
+              canvasRef.current.width,
+              canvasRef.current.height,
+            );
+          }
+        }
+
+        handsRef.current = null;
+        setIsInitialized(false);
+        setGestureData({
+          landmarks: [],
+          isHandDetected: false,
+          gestureType: "idle",
+          handPosition: { x: 0, y: 0, z: 0 },
+          confidence: 0,
+        });
+
+        console.log("🛑 Hand tracking stopped");
+      } catch (err) {
+        console.error("Error stopping hand tracking:", err);
       }
-
-      handsRef.current = null;
-      setIsInitialized(false);
-      setGestureData({
-        landmarks: [],
-        isHandDetected: false,
-        gestureType: "idle",
-        handPosition: { x: 0, y: 0, z: 0 },
-        confidence: 0,
-      });
-
-      console.log("🛑 Hand tracking stopped");
-    } catch (err) {
-      console.error("Error stopping hand tracking:", err);
     }
   };
 
@@ -395,6 +492,20 @@ export const useGestureRecognition = () => {
       stopCamera();
     };
   }, []);
+
+  // Use fallback data when in fallback mode
+  if (useFallback) {
+    return {
+      videoRef: fallbackGesture.videoRef,
+      canvasRef: fallbackGesture.canvasRef,
+      gestureData: fallbackGesture.gestureData,
+      isInitialized: fallbackGesture.isInitialized,
+      isLoading: fallbackGesture.isLoading,
+      error: fallbackGesture.error || "Using fallback gesture recognition",
+      initializeCamera,
+      stopCamera,
+    };
+  }
 
   return {
     videoRef,

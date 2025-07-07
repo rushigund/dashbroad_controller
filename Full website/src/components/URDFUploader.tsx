@@ -21,6 +21,7 @@ import {
   Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { urdfAPI } from "@/services/api";
 
 interface URDFUploaderProps {
   onURDFLoad: (urdfData: string, filename: string) => void;
@@ -129,12 +130,16 @@ const URDFUploader: React.FC<URDFUploaderProps> = ({
       }
 
       try {
-        // Import API here to avoid issues with module loading
-        const { uploadFile } = await import("@/services/api");
+        console.log(`📁 Uploading ${urdfFiles.length} URDF file(s)...`);
 
         for (let i = 0; i < urdfFiles.length; i++) {
           const file = urdfFiles[i];
-          setUploadProgress(((i + 1) / urdfFiles.length) * 50);
+          const progressBase = (i / urdfFiles.length) * 100;
+          setUploadProgress(progressBase);
+
+          console.log(
+            `📤 Uploading: ${file.name} (${(file.size / 1024).toFixed(1)}KB)`,
+          );
 
           // Check file size (max 50MB to match backend)
           if (file.size > 50 * 1024 * 1024) {
@@ -149,50 +154,79 @@ const URDFUploader: React.FC<URDFUploaderProps> = ({
               : "4wd";
             const category = "research"; // Default category
 
-            const response = await uploadFile(
-              file,
-              {
-                robotType,
-                category,
-                name: file.name.replace(/\.[^/.]+$/, ""),
-                description: `Uploaded URDF file: ${file.name}`,
-              },
-              (progress) => {
-                setUploadProgress(
-                  (i / urdfFiles.length) * 100 + progress / urdfFiles.length,
-                );
-              },
-            );
+            const response = await urdfAPI.uploadFile(file, {
+              robotType,
+              category,
+              name: file.name.replace(/\.[^/.]+$/, ""),
+              description: `Uploaded URDF file: ${file.name}`,
+            });
 
-            const uploadedFile = response.data.data.urdfFile;
+            console.log(`✅ Upload successful: ${file.name}`);
+            const uploadedFile = response.data.data;
 
             // Convert to local format for compatibility
             const processedFile: UploadedFile = {
-              name: uploadedFile.name,
-              size: uploadedFile.fileSize,
-              data: "", // Will be loaded when needed
-              uploadedAt: new Date(uploadedFile.createdAt),
-              isValid: uploadedFile.validation.isValid,
-              errorMessage: uploadedFile.validation.errors.join(", "),
-              id: uploadedFile._id,
+              name: uploadedFile.filename || uploadedFile.name || file.name,
+              size: uploadedFile.size || uploadedFile.fileSize || file.size,
+              data: uploadedFile.content || "", // Store content from demo API
+              uploadedAt: new Date(
+                uploadedFile.uploadedAt || uploadedFile.createdAt || new Date(),
+              ),
+              isValid: uploadedFile.validation?.isValid ?? true, // Assume valid in demo mode
+              errorMessage: uploadedFile.validation?.errors?.join(", ") || "",
+              id: uploadedFile.id || uploadedFile._id || `demo-${Date.now()}`,
               serverFile: uploadedFile,
             };
 
             setUploadedFiles((prev) => [...prev, processedFile]);
 
-            // Auto-select the first valid file
-            if (processedFile.isValid && !selectedFile) {
+            // Auto-select the first valid file and load content immediately
+            if (processedFile.isValid) {
               setSelectedFile(processedFile);
-              // For server files, we'll load the content when needed
-              onURDFLoad("", processedFile.name);
+
+              // If content is already available from demo API, use it immediately
+              if (processedFile.data) {
+                console.log(
+                  `🎯 Auto-loading URDF content for 3D visualization: ${processedFile.name}`,
+                );
+                onURDFLoad(processedFile.data, processedFile.name);
+              } else {
+                // For real files, read the content to pass to the 3D viewer
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  const content = e.target?.result as string;
+                  if (content) {
+                    processedFile.data = content; // Store content in the file object
+                    console.log(
+                      `🎯 Auto-loading URDF content for 3D visualization: ${processedFile.name}`,
+                    );
+                    onURDFLoad(content, processedFile.name);
+                  }
+                };
+                reader.readAsText(file);
+              }
             }
           } catch (uploadError: any) {
             console.error(`Failed to upload ${file.name}:`, uploadError);
-            alert(
-              `Failed to upload ${file.name}: ${
-                uploadError.response?.data?.message || uploadError.message
-              }`,
-            );
+            const errorMessage =
+              uploadError.response?.data?.message ||
+              uploadError.message ||
+              "Unknown upload error";
+
+            // Show user-friendly error message
+            setUploadedFiles((prev) => [
+              ...prev,
+              {
+                name: file.name,
+                size: file.size,
+                data: "",
+                uploadedAt: new Date(),
+                isValid: false,
+                errorMessage: `Upload failed: ${errorMessage}`,
+                id: `error-${Date.now()}`,
+                serverFile: null,
+              },
+            ]);
           }
 
           setUploadProgress(((i + 1) / urdfFiles.length) * 100);
@@ -243,10 +277,33 @@ const URDFUploader: React.FC<URDFUploaderProps> = ({
     e.target.value = "";
   };
 
-  const selectFile = (file: UploadedFile) => {
+  const selectFile = async (file: UploadedFile) => {
     if (file.isValid) {
       setSelectedFile(file);
-      onURDFLoad(file.data, file.name);
+
+      // If we have the content already, use it
+      if (file.data) {
+        console.log(`🎯 Loading cached URDF content: ${file.name}`);
+        onURDFLoad(file.data, file.name);
+      } else if (file.serverFile?.content) {
+        // If it's from demo API, use the content from server response
+        console.log(`🎯 Loading URDF content from server: ${file.name}`);
+        onURDFLoad(file.serverFile.content, file.name);
+      } else {
+        // For real server files, we might need to fetch the content
+        console.log(`🔄 Loading URDF content for: ${file.name}`);
+        try {
+          // This would be used with real API to fetch file content
+          // For now, we'll use a placeholder since demo mode provides content
+          onURDFLoad(
+            file.data ||
+              `<!-- URDF content for ${file.name} would be loaded here -->`,
+            file.name,
+          );
+        } catch (error) {
+          console.error("Failed to load URDF content:", error);
+        }
+      }
     }
   };
 

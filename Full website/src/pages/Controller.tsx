@@ -15,6 +15,7 @@ import { useGestureRecognition } from "@/hooks/useGestureRecognition";
 import RobotModel3D from "@/components/RobotModel3D";
 import URDFUploader from "@/components/URDFUploader";
 import MediaPipeStatus from "@/components/MediaPipeStatus";
+import CameraPermissionHelper from "@/components/CameraPermissionHelper";
 import {
   Settings,
   Camera,
@@ -28,7 +29,20 @@ import {
   Hand,
   Upload,
   Monitor,
+  FileText,
+  Code,
+  Layers3,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  Grid3X3,
+  Axis3D,
+  RefreshCw,
+  Save,
+  Folder,
+  CheckCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const Controller = () => {
   const {
@@ -46,6 +60,27 @@ const Controller = () => {
   const [currentURDFFile, setCurrentURDFFile] = useState<string>("");
   const [isControlActive, setIsControlActive] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [isLoadingModel, setIsLoadingModel] = useState(false);
+
+  // Enhanced URDF viewer state
+  const [showURDFCode, setShowURDFCode] = useState(false);
+  const [urdfHistory, setUrdfHistory] = useState<
+    Array<{ name: string; data: string; timestamp: string }>
+  >([]);
+  const [viewerSettings, setViewerSettings] = useState({
+    showGrid: true,
+    showAxes: true,
+    autoRotate: false,
+    wireframe: false,
+    showJoints: true,
+    showCollisionMeshes: false,
+  });
+  const [modelInfo, setModelInfo] = useState({
+    links: 0,
+    joints: 0,
+    materials: 0,
+    meshes: 0,
+  });
 
   useEffect(() => {
     // Auto-start camera when component mounts
@@ -54,9 +89,72 @@ const Controller = () => {
     }
   }, [isInitialized, error, initializeCamera]);
 
+  // Analyze URDF structure
+  useEffect(() => {
+    if (urdfData) {
+      analyzeURDFStructure(urdfData);
+    }
+  }, [urdfData]);
+
+  const analyzeURDFStructure = (data: string) => {
+    const linkMatches = data.match(/<link/g);
+    const jointMatches = data.match(/<joint/g);
+    const materialMatches = data.match(/<material/g);
+    const meshMatches = data.match(/<mesh/g);
+
+    setModelInfo({
+      links: linkMatches ? linkMatches.length : 0,
+      joints: jointMatches ? jointMatches.length : 0,
+      materials: materialMatches ? materialMatches.length : 0,
+      meshes: meshMatches ? meshMatches.length : 0,
+    });
+  };
+
   const handleURDFLoad = (data: string, filename: string) => {
-    setUrdfData(data);
-    setCurrentURDFFile(filename);
+    console.log(`🎯 Loading new URDF model in 3D viewer: ${filename}`);
+    console.log(`📊 URDF data length: ${data.length} characters`);
+
+    setIsLoadingModel(true);
+
+    // Simulate processing time for better UX
+    setTimeout(() => {
+      setUrdfData(data);
+      setCurrentURDFFile(filename);
+      setIsLoadingModel(false);
+    }, 500);
+
+    // Add to history
+    const newEntry = {
+      name: filename,
+      data: data,
+      timestamp: new Date().toISOString(),
+    };
+    setUrdfHistory((prev) => [newEntry, ...prev.slice(0, 4)]); // Keep last 5 entries
+
+    // Log successful load and show user notification
+    if (data && data.length > 0) {
+      console.log(
+        `✅ 3D Model updated: ${filename} is now displayed in the viewer`,
+      );
+
+      // Show success toast notification
+      toast.success("URDF Model Loaded", {
+        description: `${filename} is now displayed in the 3D viewer`,
+        icon: <CheckCircle className="w-4 h-4" />,
+        duration: 4000,
+      });
+    } else {
+      console.warn(`⚠️ Empty URDF data received for ${filename}`);
+      toast.error("Failed to Load Model", {
+        description: `No valid URDF data received for ${filename}`,
+        duration: 4000,
+      });
+    }
+  };
+
+  const loadFromHistory = (entry: (typeof urdfHistory)[0]) => {
+    setUrdfData(entry.data);
+    setCurrentURDFFile(entry.name);
   };
 
   const toggleControl = () => {
@@ -70,9 +168,37 @@ const Controller = () => {
   };
 
   const resetRobot = () => {
-    // This would reset the robot to its initial pose
-    // Implementation would depend on the 3D model system
     console.log("Resetting robot to initial pose");
+  };
+
+  const exportSettings = () => {
+    const exportData = {
+      urdfFile: currentURDFFile,
+      urdfData: urdfData,
+      viewerSettings: viewerSettings,
+      gestureSettings: {
+        isControlActive,
+        showInstructions,
+      },
+      modelInfo: modelInfo,
+      timestamp: new Date().toISOString(),
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `robot_controller_session_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyURDFCode = () => {
+    if (urdfData) {
+      navigator.clipboard.writeText(urdfData);
+    }
   };
 
   const gestureInstructions = [
@@ -110,15 +236,15 @@ const Controller = () => {
           <div className="text-center">
             <Badge variant="outline" className="mb-4">
               <Settings className="w-3 h-3 mr-1" />
-              Live Robot Control
+              Advanced Robot Control & URDF Viewer
             </Badge>
             <h1 className="text-4xl lg:text-6xl font-display font-bold mb-6">
               3D Robot <span className="text-primary">Controller</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Control robots in real-time using hand gestures. Upload URDF
-              models and watch them respond to your movements with our advanced
-              computer vision system.
+              Control robots in real-time using hand gestures with integrated
+              URDF model viewing. Upload robot models, visualize them in 3D, and
+              control them with our advanced computer vision system.
             </p>
           </div>
         </div>
@@ -127,7 +253,7 @@ const Controller = () => {
       {/* Main Controller Interface */}
       <section className="py-8 flex-1">
         <div className="container mx-auto px-4">
-          <div className="grid lg:grid-cols-3 gap-8">
+          <div className="grid lg:grid-cols-4 gap-8">
             {/* Left Panel - Camera and Controls */}
             <div className="lg:col-span-1 space-y-6">
               {/* Camera Feed */}
@@ -148,7 +274,7 @@ const Controller = () => {
                     </div>
                   </CardTitle>
                   <CardDescription>
-                    Simple gesture recognition for robot control
+                    MediaPipe-powered hand gesture recognition
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -229,10 +355,13 @@ const Controller = () => {
                   </div>
 
                   {error && (
-                    <Alert className="mt-4 border-destructive/20 bg-destructive/5">
-                      <Info className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
+                    <div className="mt-4">
+                      <CameraPermissionHelper
+                        error={error}
+                        onRetry={initializeCamera}
+                        isLoading={isLoading}
+                      />
+                    </div>
                   )}
 
                   <div className="flex gap-2 mt-4">
@@ -268,7 +397,7 @@ const Controller = () => {
                     Hand Tracking Status
                   </CardTitle>
                   <CardDescription>
-                    MediaPipe-powered hand gesture recognition
+                    Real-time gesture recognition feedback
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -309,6 +438,44 @@ const Controller = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Model Information */}
+              {currentURDFFile && (
+                <Card className="border-0 shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      Model Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">File:</span>
+                        <span className="font-medium">{currentURDFFile}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Links:</span>
+                        <Badge variant="outline">{modelInfo.links}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Joints:</span>
+                        <Badge variant="outline">{modelInfo.joints}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Materials:
+                        </span>
+                        <Badge variant="outline">{modelInfo.materials}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Meshes:</span>
+                        <Badge variant="outline">{modelInfo.meshes}</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Instructions */}
               {showInstructions && (
@@ -354,13 +521,13 @@ const Controller = () => {
               )}
             </div>
 
-            {/* Right Panel - 3D Visualization */}
+            {/* Center Panel - 3D Visualization */}
             <div className="lg:col-span-2">
               <Card className="border-0 shadow-lg h-full">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Monitor className="w-5 h-5" />
-                    3D Robot Visualization
+                    3D Robot Visualization & Control
                     {currentURDFFile && (
                       <Badge variant="secondary" className="ml-auto">
                         {currentURDFFile}
@@ -368,179 +535,324 @@ const Controller = () => {
                     )}
                   </CardTitle>
                   <CardDescription>
-                    Real-time 3D robot model controlled by your gestures
+                    Real-time 3D robot model controlled by hand gestures
+                    {currentURDFFile && (
+                      <span className="text-green-600 font-medium ml-2">
+                        • Model Loaded: {modelInfo.links} links,{" "}
+                        {modelInfo.joints} joints
+                      </span>
+                    )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div className="h-[600px] w-full">
+                  <div className="h-[600px] w-full relative">
                     <RobotModel3D
                       gestureData={gestureData}
                       urdfData={urdfData}
                     />
+
+                    {/* Loading overlay when processing new URDF */}
+                    {isLoadingModel && (
+                      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center gap-4 shadow-xl">
+                          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                          <div>
+                            <div className="font-medium">Loading 3D Model</div>
+                            <div className="text-sm text-muted-foreground">
+                              Processing {currentURDFFile}...
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3D Viewer Controls */}
+                  <div className="p-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm">
+                          <ZoomIn className="w-4 h-4 mr-2" />
+                          Zoom In
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <ZoomOut className="w-4 h-4 mr-2" />
+                          Zoom Out
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-4 h-4 mr-2" />
+                          Reset View
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={viewerSettings.showGrid}
+                            onChange={(e) =>
+                              setViewerSettings((prev) => ({
+                                ...prev,
+                                showGrid: e.target.checked,
+                              }))
+                            }
+                            className="rounded"
+                          />
+                          <Grid3X3 className="w-4 h-4" />
+                          <span>Grid</span>
+                        </label>
+
+                        <label className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={viewerSettings.showAxes}
+                            onChange={(e) =>
+                              setViewerSettings((prev) => ({
+                                ...prev,
+                                showAxes: e.target.checked,
+                              }))
+                            }
+                            className="rounded"
+                          />
+                          <Axis3D className="w-4 h-4" />
+                          <span>Axes</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Panel - URDF Management */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* URDF Upload */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="w-5 h-5" />
+                    URDF Manager
+                  </CardTitle>
+                  <CardDescription>
+                    Upload and manage robot models
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <URDFUploader onURDFLoad={handleURDFLoad} />
+                </CardContent>
+              </Card>
+
+              {/* URDF History */}
+              {urdfHistory.length > 0 && (
+                <Card className="border-0 shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Folder className="w-5 h-5" />
+                      Recent Models
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {urdfHistory.map((entry, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {entry.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(entry.timestamp).toLocaleString()}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => loadFromHistory(entry)}
+                          >
+                            Load
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Viewer Settings */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Viewer Settings
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={viewerSettings.autoRotate}
+                        onChange={(e) =>
+                          setViewerSettings((prev) => ({
+                            ...prev,
+                            autoRotate: e.target.checked,
+                          }))
+                        }
+                        className="rounded"
+                      />
+                      <RefreshCw className="w-4 h-4" />
+                      <span className="text-sm">Auto Rotate</span>
+                    </label>
+
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={viewerSettings.wireframe}
+                        onChange={(e) =>
+                          setViewerSettings((prev) => ({
+                            ...prev,
+                            wireframe: e.target.checked,
+                          }))
+                        }
+                        className="rounded"
+                      />
+                      <Layers3 className="w-4 h-4" />
+                      <span className="text-sm">Wireframe Mode</span>
+                    </label>
+
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={viewerSettings.showJoints}
+                        onChange={(e) =>
+                          setViewerSettings((prev) => ({
+                            ...prev,
+                            showJoints: e.target.checked,
+                          }))
+                        }
+                        className="rounded"
+                      />
+                      <Bot className="w-4 h-4" />
+                      <span className="text-sm">Show Joints</span>
+                    </label>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowURDFCode(!showURDFCode)}
+                      disabled={!urdfData}
+                    >
+                      <Code className="w-4 h-4 mr-2" />
+                      {showURDFCode ? "Hide" : "View"} URDF Code
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        // Load test URDF for debugging
+                        const testURDF = `<?xml version="1.0"?>
+<robot name="test_debug_robot">
+  <material name="blue">
+    <color rgba="0.2 0.2 0.8 1.0"/>
+  </material>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.5 0.3 0.2"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+
+  <link name="arm">
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.4"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+
+  <joint name="arm_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="arm"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.57" upper="1.57" effort="10" velocity="1"/>
+  </joint>
+</robot>`;
+                        console.log("🧪 Loading test URDF for debugging...");
+                        handleURDFLoad(testURDF, "debug_test.urdf");
+                      }}
+                    >
+                      <Bot className="w-4 h-4 mr-2" />
+                      Test URDF
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={exportSettings}
+                      disabled={!currentURDFFile}
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Export Session
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             </div>
           </div>
 
-          {/* URDF Upload Section */}
-          <div className="mt-8">
-            <Tabs defaultValue="upload" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="upload" className="gap-2">
-                  <Upload className="w-4 h-4" />
-                  Upload URDF
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="gap-2">
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="upload" className="mt-6">
-                <URDFUploader onURDFLoad={handleURDFLoad} />
-              </TabsContent>
-
-              <TabsContent value="settings" className="mt-6">
-                <div className="grid md:grid-cols-2 gap-8">
-                  <Card className="border-0 shadow-lg">
-                    <CardHeader>
-                      <CardTitle>Control Settings</CardTitle>
-                      <CardDescription>
-                        Adjust gesture recognition and control parameters
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <h4 className="font-medium">Gesture Recognition</h4>
-                          <div className="space-y-2 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <Eye className="w-4 h-4" />
-                              Detection Confidence: 50%
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Camera className="w-4 h-4" />
-                              Tracking Confidence: 50%
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Hand className="w-4 h-4" />
-                              Max Hands: 1
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          <h4 className="font-medium">Robot Control</h4>
-                          <div className="space-y-2 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <Zap className="w-4 h-4" />
-                              Response Speed: Normal
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Bot className="w-4 h-4" />
-                              Movement Scale: 1.0x
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <RotateCcw className="w-4 h-4" />
-                              Smoothing: Enabled
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-0 shadow-lg">
-                    <CardHeader>
-                      <CardTitle>System Information</CardTitle>
-                      <CardDescription>
-                        Hand tracking and gesture recognition status
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <h4 className="font-medium flex items-center gap-2">
-                            <Camera className="w-4 h-4" />
-                            Camera Status
-                          </h4>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex items-center justify-between">
-                              <span>Camera:</span>
-                              <Badge
-                                variant={
-                                  isInitialized ? "default" : "destructive"
-                                }
-                              >
-                                {isInitialized ? "Active" : "Inactive"}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span>Hand Detection:</span>
-                              <Badge
-                                variant={
-                                  gestureData.isHandDetected
-                                    ? "default"
-                                    : "secondary"
-                                }
-                              >
-                                {gestureData.isHandDetected
-                                  ? "Detected"
-                                  : "No Hand"}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4">
-                          <h4 className="font-medium">Current Status</h4>
-                          <div className="space-y-2 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 bg-primary rounded-full"></span>
-                              Gesture: {gestureData.gestureType.toUpperCase()}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 bg-secondary rounded-full"></span>
-                              Confidence:{" "}
-                              {(gestureData.confidence * 100).toFixed(0)}%
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                              Position: ({gestureData.handPosition.x.toFixed(2)}
-                              , {gestureData.handPosition.y.toFixed(2)})
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.location.reload()}
-                            className="w-full"
-                          >
-                            <RotateCcw className="w-4 h-4 mr-2" />
-                            Restart System
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Alert className="mt-6">
-                  <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Development Mode:</strong> The controller works with
-                    or without ROS. In mock mode, gestures control the 3D
-                    visualization only. Connect a ROS bridge at{" "}
-                    <code>ws://localhost:9090</code> for real robot control.
-                  </AlertDescription>
-                </Alert>
-              </TabsContent>
-            </Tabs>
-          </div>
+          {/* URDF Code Viewer */}
+          {showURDFCode && urdfData && (
+            <div className="mt-8">
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Code className="w-5 h-5" />
+                      URDF Source Code - {currentURDFFile}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyURDFCode}
+                      >
+                        Copy Code
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowURDFCode(false)}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative">
+                    <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-96 text-sm">
+                      <code>{urdfData}</code>
+                    </pre>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </section>
     </div>

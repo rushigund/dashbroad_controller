@@ -59,7 +59,8 @@ const Auth = () => {
               Account Access
             </Badge>
             <h1 className="text-4xl lg:text-6xl font-display font-bold mb-6">
-              Join the <span className="text-primary">RoboTech</span> Community
+              Join the <span className="text-primary">Techligence</span>{" "}
+              Community
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Create your account to access advanced robot control features,
@@ -81,7 +82,7 @@ const Auth = () => {
                 </h2>
                 <p className="text-muted-foreground text-lg leading-relaxed">
                   Join thousands of engineers, researchers, and robotics
-                  enthusiasts who trust RoboTech for their robotic automation
+                  enthusiasts who trust Techligence for their robotic automation
                   needs.
                 </p>
               </div>
@@ -131,7 +132,7 @@ const Auth = () => {
                     <Bot className="w-6 h-6 text-primary" />
                   </div>
                   <CardTitle className="text-2xl font-display">
-                    Welcome to RoboTech
+                    Welcome to Techligence
                   </CardTitle>
                   <CardDescription>
                     Sign in to your account or create a new one

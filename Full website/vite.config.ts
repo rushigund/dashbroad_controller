@@ -26,4 +26,11 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: [
+      "@mediapipe/hands",
+      "@mediapipe/camera_utils",
+      "@mediapipe/drawing_utils",
+    ],
+  },
 }));

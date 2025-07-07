@@ -359,5 +359,181 @@ export const urdfAPI = {
     ),
 };
 
+// Career API
+export const careerAPI = {
+  // Submit job application
+  submitApplication: (formData: FormData) => {
+    return apiCall(
+      () =>
+        api.post("/career/apply", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }),
+      async () => {
+        // Demo mode simulation
+        await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate network delay
+        return {
+          data: {
+            success: true,
+            message: "Application submitted successfully! (Demo Mode)",
+            data: {
+              applicationId: `demo-${Date.now()}`,
+              submittedAt: new Date().toISOString(),
+              status: "submitted",
+            },
+          },
+        };
+      },
+    );
+  },
+
+  // Get applications (admin)
+  getApplications: (params = {}) =>
+    apiCall(
+      () => api.get("/career/applications", { params }),
+      async () => ({
+        data: {
+          success: true,
+          data: {
+            applications: [],
+            total: 0,
+            totalPages: 0,
+            currentPage: 1,
+          },
+        },
+      }),
+    ),
+
+  // Get single application
+  getApplication: (applicationId: string) =>
+    apiCall(
+      () => api.get(`/career/applications/${applicationId}`),
+      async () => ({
+        data: {
+          success: true,
+          data: {
+            _id: applicationId,
+            jobTitle: "Demo Position",
+            status: "submitted",
+          },
+        },
+      }),
+    ),
+
+  // Update application status
+  updateApplicationStatus: (
+    applicationId: string,
+    status: string,
+    notes?: string,
+  ) =>
+    apiCall(
+      () =>
+        api.put(`/career/applications/${applicationId}/status`, {
+          status,
+          internalNotes: notes,
+        }),
+      async () => ({
+        data: {
+          success: true,
+          message: "Application status updated (demo mode)",
+        },
+      }),
+    ),
+};
+
+// Contact API
+export const contactAPI = {
+  // Submit contact form
+  submitContact: (contactData: {
+    name: string;
+    email: string;
+    company?: string;
+    inquiryType: string;
+    subject: string;
+    message: string;
+  }) =>
+    apiCall(
+      () => api.post("/contact/submit", contactData),
+      async () => {
+        // Demo mode simulation
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate network delay
+        return {
+          data: {
+            success: true,
+            message:
+              "Thank you for your message! We'll get back to you soon. (Demo Mode)",
+            data: {
+              ticketId: `demo-${Date.now()}`,
+              submittedAt: new Date().toISOString(),
+              assignedTo: "Demo Team",
+              estimatedResponse: "2-3 business days",
+            },
+          },
+        };
+      },
+    ),
+
+  // Get contact messages (admin)
+  getMessages: (params = {}) =>
+    apiCall(
+      () => api.get("/contact/messages", { params }),
+      async () => ({
+        data: {
+          success: true,
+          data: {
+            messages: [],
+            total: 0,
+            totalPages: 0,
+            currentPage: 1,
+          },
+        },
+      }),
+    ),
+
+  // Get single message
+  getMessage: (messageId: string) =>
+    apiCall(
+      () => api.get(`/contact/messages/${messageId}`),
+      async () => ({
+        data: {
+          success: true,
+          data: {
+            _id: messageId,
+            name: "Demo User",
+            email: "demo@example.com",
+            subject: "Demo Inquiry",
+            status: "new",
+          },
+        },
+      }),
+    ),
+
+  // Respond to message
+  respondToMessage: (messageId: string, responseMessage: string) =>
+    apiCall(
+      () =>
+        api.put(`/contact/messages/${messageId}/respond`, { responseMessage }),
+      async () => ({
+        data: {
+          success: true,
+          message: "Response sent successfully (demo mode)",
+        },
+      }),
+    ),
+
+  // Update message status
+  updateMessageStatus: (messageId: string, updates: any) =>
+    apiCall(
+      () => api.put(`/contact/messages/${messageId}/status`, updates),
+      async () => ({
+        data: {
+          success: true,
+          message: "Message status updated (demo mode)",
+        },
+      }),
+    ),
+};
+
 // Export demo mode status for components to use
 export { isDemoMode };

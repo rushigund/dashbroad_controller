@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import AppStatus from "@/components/AppStatus";
+import Footer from "@/components/Footer";
 import {
   ArrowRight,
   Bot,
@@ -151,7 +152,7 @@ const Index = () => {
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">
               <Award className="w-3 h-3 mr-1" />
-              Why Choose RoboTech
+              Why Choose Techligence
             </Badge>
             <h2 className="text-3xl lg:text-5xl font-display font-bold mb-6">
               Engineering Excellence
@@ -276,6 +277,9 @@ const Index = () => {
           </div>
         </section>
       )}
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 };

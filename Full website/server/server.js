@@ -127,6 +127,8 @@ app.get("/", (req, res) => {
         robots: "/api/robots",
         control: "/api/control",
         urdf: "/api/urdf",
+        career: "/api/career",
+        contact: "/api/contact",
       },
     });
   } else {
@@ -154,6 +156,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/robots", robotRoutes);
 app.use("/api/urdf", urdfRoutes);
 app.use("/api/control", controlRoutes);
+app.use("/api/career", require("./routes/career"));
+app.use("/api/contact", require("./routes/contact"));
 
 // Initialize robot communication manager
 const robotCommManager = new RobotCommunicationManager();

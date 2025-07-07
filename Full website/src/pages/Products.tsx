@@ -66,7 +66,7 @@ const Products = () => {
   const robots = [
     {
       id: 1,
-      name: "RoboTech Explorer Pro",
+      name: "Techligence Explorer Pro",
       category: "exploration",
       price: "$12,999",
       originalPrice: "$15,999",
