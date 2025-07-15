@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -30,6 +30,14 @@ import {
   Mail,
   Phone,
   Building,
+  Wrench,
+  Beaker,
+  Brain,
+  Eye,
+  Users,
+  Activity,
+  Smile,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ShoppingCart from "./ShoppingCart";
@@ -135,8 +143,68 @@ const Navigation = () => {
           },
         ],
       },
+      robotlab: {
+        name: "Robot Lab",
+        href: "/robot-lab",
+        icon: Beaker,
+        categories: [
+          {
+            name: "Robot Control",
+            items: [
+              {
+                title: "R.T. Controller",
+                href: "/controller",
+                description:
+                  "Control robots with hand gestures and URDF uploads",
+                icon: Settings,
+              },
+            ],
+          },
+          {
+            name: "ML Tools",
+            items: [
+              {
+                title: "Face Recognition",
+                href: "/ml-tools/face-recognition",
+                description: "AI-powered facial recognition and analysis",
+                icon: Eye,
+              },
+              {
+                title: "Depth Estimation",
+                href: "/ml-tools/depth-estimation",
+                description: "3D depth perception and spatial analysis",
+                icon: Brain,
+              },
+              {
+                title: "Age Estimation",
+                href: "/ml-tools/age-estimation",
+                description: "Automated age detection and classification",
+                icon: Users,
+              },
+              {
+                title: "Activity Estimation",
+                href: "/ml-tools/activity-estimation",
+                description: "Real-time activity and behavior recognition",
+                icon: Activity,
+              },
+              {
+                title: "Emotion Detection",
+                href: "/ml-tools/emotion",
+                description: "Emotional state analysis and recognition",
+                icon: Smile,
+              },
+              {
+                title: "Object Detection",
+                href: "/ml-tools/object-detection",
+                description: "Advanced object identification and tracking",
+                icon: Search,
+              },
+            ],
+          },
+        ],
+      },
     },
-    simple_end: [{ name: "Controller", href: "/controller", icon: Settings }],
+    simple_end: [],
   };
 
   const isActive = (href: string) => {
@@ -155,23 +223,35 @@ const Navigation = () => {
     );
   };
 
-  const isDropdownActive = (items: any[]) => {
-    return items.some((item) => isActive(item.href));
+  const isDropdownActive = (
+    items: any[] | undefined,
+    categories: any[] | undefined,
+  ) => {
+    if (categories) {
+      return categories.some((category) =>
+        category.items.some((item: any) => isActive(item.href)),
+      );
+    }
+    if (items) {
+      return items.some((item) => isActive(item.href));
+    }
+    return false;
   };
 
-  const NavLink = ({
-    item,
-    mobile = false,
-  }: {
-    item: any;
-    mobile?: boolean;
-  }) => {
+  const NavLink = forwardRef<
+    HTMLAnchorElement,
+    {
+      item: any;
+      mobile?: boolean;
+    }
+  >(({ item, mobile = false }, ref) => {
     const isController = item.href === "/controller";
     const shouldHighlight =
       isActive(item.href) || (isController && location.pathname === "/");
 
     return (
       <Link
+        ref={ref}
         to={item.href}
         onClick={() => mobile && setIsOpen(false)}
         className={cn(
@@ -192,7 +272,7 @@ const Navigation = () => {
         {item.name}
       </Link>
     );
-  };
+  });
 
   const DropdownNavItem = ({
     config,
@@ -201,22 +281,73 @@ const Navigation = () => {
     config: any;
     mobile?: boolean;
   }) => {
+    const isRobotLabDropdown = config.name === "Robot Lab";
+    const shouldHighlightRobotLab =
+      isRobotLabDropdown &&
+      (isDropdownActive(config.items, config.categories) ||
+        location.pathname === "/");
+
     if (mobile) {
       return (
         <div className="space-y-2">
-          <NavLink item={config} mobile={mobile} />
-          <div className="ml-4 space-y-1">
-            {config.items.map((item: any, index: number) => (
-              <Link
-                key={index}
-                to={item.href}
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              >
-                <item.icon className="h-3 w-3" />
-                {item.title}
-              </Link>
-            ))}
+          <div
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium",
+              isRobotLabDropdown
+                ? shouldHighlightRobotLab
+                  ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg ring-2 ring-orange-200 dark:ring-orange-800"
+                  : "text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950 border border-orange-200 dark:border-orange-800"
+                : isDropdownActive(config.items, config.categories)
+                  ? "bg-primary text-primary-foreground shadow-lg"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent",
+            )}
+          >
+            {config.icon && <config.icon className="h-4 w-4" />}
+            {config.name}
+          </div>
+          <div className="ml-4 space-y-3">
+            {config.categories
+              ? config.categories.map(
+                  (category: any, categoryIndex: number) => (
+                    <div key={categoryIndex} className="space-y-1">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-3 py-1">
+                        {category.name}
+                      </div>
+                      {category.items.map((item: any, index: number) => (
+                        <Link
+                          key={index}
+                          to={item.href}
+                          onClick={() => setIsOpen(false)}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                            isActive(item.href)
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                          )}
+                        >
+                          <item.icon className="h-3 w-3" />
+                          {item.title}
+                        </Link>
+                      ))}
+                    </div>
+                  ),
+                )
+              : config.items?.map((item: any, index: number) => (
+                  <Link
+                    key={index}
+                    to={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                      isActive(item.href)
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent",
+                    )}
+                  >
+                    <item.icon className="h-3 w-3" />
+                    {item.title}
+                  </Link>
+                ))}
           </div>
         </div>
       );
@@ -226,9 +357,13 @@ const Navigation = () => {
       <NavigationMenuItem>
         <NavigationMenuTrigger
           className={cn(
-            "bg-transparent hover:bg-accent data-[state=open]:bg-accent",
-            isDropdownActive(config.items) &&
-              "bg-primary text-primary-foreground hover:bg-primary/90",
+            "bg-transparent hover:bg-accent data-[state=open]:bg-accent transition-all duration-200",
+            isRobotLabDropdown
+              ? shouldHighlightRobotLab
+                ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg ring-2 ring-orange-200 dark:ring-orange-800 hover:from-orange-600 hover:to-red-600"
+                : "text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950 border border-orange-200 dark:border-orange-800"
+              : isDropdownActive(config.items, config.categories) &&
+                  "bg-primary text-primary-foreground hover:bg-primary/90",
           )}
         >
           <div className="flex items-center gap-2">
@@ -237,28 +372,69 @@ const Navigation = () => {
           </div>
         </NavigationMenuTrigger>
         <NavigationMenuContent>
-          <div className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
-            {config.items.map((item: any, index: number) => (
-              <NavigationMenuLink key={index} asChild>
-                <Link
-                  to={item.href}
-                  className={cn(
-                    "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-                    isActive(item.href) && "bg-primary text-primary-foreground",
-                  )}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <item.icon className="h-4 w-4" />
-                    <div className="text-sm font-medium leading-none">
-                      {item.title}
+          <div className="w-[500px] p-4 md:w-[600px] lg:w-[700px]">
+            {config.categories ? (
+              <div className="space-y-6">
+                {config.categories.map(
+                  (category: any, categoryIndex: number) => (
+                    <div key={categoryIndex}>
+                      <h4 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                        {category.name}
+                      </h4>
+                      <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
+                        {category.items.map((item: any, index: number) => (
+                          <NavigationMenuLink key={index} asChild>
+                            <Link
+                              to={item.href}
+                              className={cn(
+                                "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                                isActive(item.href) &&
+                                  "bg-primary text-primary-foreground",
+                              )}
+                            >
+                              <div className="flex items-center gap-2 mb-2">
+                                <item.icon className="h-4 w-4" />
+                                <div className="text-sm font-medium leading-none">
+                                  {item.title}
+                                </div>
+                              </div>
+                              <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+                                {item.description}
+                              </p>
+                            </Link>
+                          </NavigationMenuLink>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                    {item.description}
-                  </p>
-                </Link>
-              </NavigationMenuLink>
-            ))}
+                  ),
+                )}
+              </div>
+            ) : (
+              <div className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
+                {config.items?.map((item: any, index: number) => (
+                  <NavigationMenuLink key={index} asChild>
+                    <Link
+                      to={item.href}
+                      className={cn(
+                        "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                        isActive(item.href) &&
+                          "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <item.icon className="h-4 w-4" />
+                        <div className="text-sm font-medium leading-none">
+                          {item.title}
+                        </div>
+                      </div>
+                      <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </Link>
+                  </NavigationMenuLink>
+                ))}
+              </div>
+            )}
           </div>
         </NavigationMenuContent>
       </NavigationMenuItem>
@@ -300,6 +476,7 @@ const Navigation = () => {
                 <DropdownNavItem config={navigationConfig.dropdown.products} />
                 <DropdownNavItem config={navigationConfig.dropdown.blog} />
                 <DropdownNavItem config={navigationConfig.dropdown.company} />
+                <DropdownNavItem config={navigationConfig.dropdown.robotlab} />
 
                 {/* Simple end items */}
                 {navigationConfig.simple_end.map((item) => (
@@ -369,6 +546,10 @@ const Navigation = () => {
                 />
                 <DropdownNavItem
                   config={navigationConfig.dropdown.company}
+                  mobile
+                />
+                <DropdownNavItem
+                  config={navigationConfig.dropdown.robotlab}
                   mobile
                 />
 
